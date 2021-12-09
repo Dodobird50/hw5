@@ -48,29 +48,34 @@ double rand01()
     return (double) rand() / (double) RAND_MAX;
 }
 
-void initGrid()
-{
-    for (int i = 0; i < GRIDSIZE; i++) {
-        for (int j = 0; j < GRIDSIZE; j++) {
-            double r = rand01();
-            if (r < 0.1) {
-                grid[i][j] = TILE_TOMATO;
-                numTomatoes++;
-            }
-            else
-                grid[i][j] = TILE_GRASS;
-        }
-    }
+// void initGrid()
+// {
+//     for (int i = 0; i < GRIDSIZE; i++) {
+//         for (int j = 0; j < GRIDSIZE; j++) {
+//             double r = rand01();
+//             if (r < 0.1) {
+//                 grid[i][j] = TILE_TOMATO;
+//                 numTomatoes++;
+//             }
+//             else
+//                 grid[i][j] = TILE_GRASS;
+//         }
+//     }
+// 
+//     // force player's position to be grass
+//     if (grid[playerPosition.x][playerPosition.y] == TILE_TOMATO) {
+//         grid[playerPosition.x][playerPosition.y] = TILE_GRASS;
+//         numTomatoes--;
+//     }
+// 
+//     // ensure grid isn't empty
+//     while (numTomatoes == 0)
+//         initGrid();
+// }
 
-    // force player's position to be grass
-    if (grid[playerPosition.x][playerPosition.y] == TILE_TOMATO) {
-        grid[playerPosition.x][playerPosition.y] = TILE_GRASS;
-        numTomatoes--;
-    }
-
-    // ensure grid isn't empty
-    while (numTomatoes == 0)
-        initGrid();
+// upon successfully connecting to server
+void setupGrid() {
+    
 }
 
 void initSDL()
