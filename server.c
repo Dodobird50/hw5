@@ -19,20 +19,22 @@
 #define GRIDSIZE 10
 
 typedef struct {
+    int playerNumber;
     int x;
     int y;
-    Player* prev;
     Player* next;
 } Player;
 int numPlayers = 0;
+int nextPlayerNumber = 2;
 
-typedef enum {
-    TILE_GRASS,
-    TILE_TOMATO
-} TILETYPE;
+#define TILE_GRASS 0
+#define TILE_TOMATO 1
 
 Player* firstPlayer;
-TILETYPE grid[GRIDSIZE][GRIDSIZE];
+int grid[GRIDSIZE][GRIDSIZE];
+int score = 0;
+int level = 1;
+int numTomatoes = 0;
 
 // get a random value in the range [0, 1]
 double rand01() {
@@ -40,35 +42,30 @@ double rand01() {
 }
 
 void initGrid() {
-    for (int i = 0; i < GRIDSIZE; i++) {
-        for (int j = 0; j < GRIDSIZE; j++) {
+    for ( int i = 0; i < GRIDSIZE; i++ ) {
+        for ( int j = 0; j < GRIDSIZE; j++ ) {
             double r = rand01();
-            if (r < 0.1) {
+            if ( r < 0.1 ) {
                 grid[i][j] = TILE_TOMATO;
                 numTomatoes++;
             }
-            else
+            else {
                 grid[i][j] = TILE_GRASS;
+            }
         }
     }
 
-    // force player's position to be grass
-    // if (grid[Player.x][Player.y] == TILE_TOMATO) {
-    //     grid[Player.x][Player.y] = TILE_GRASS;
-    //     numTomatoes--;
-    // }
-
-    // ensure grid isn't empty
-    while (numTomatoes == 0)
+    if ( numTomatoes == 0 ) {
         initGrid();
+    }
 }
 
 sem_t modifyGrid;   // appleis for addPlayer, removePlayer, and movePlayer
 
-Player* getPlayer( int x, int y ) {
+Player* getPlayerByPlayerNumber( Player* playerNumber ) {
     Player* player = firstPlayer;
     while ( player ) {
-        if ( player->x == x && player->y == y ) {
+        if ( player->playerNumber == playerNumber ) {
             return player;
         }
     }
@@ -81,30 +78,39 @@ Player* addPlayer( int x, int y ) {
     }
     
     sem_wait( modifyGrid );
+    
+    if ( grid[x][y] != TILE_GRASS ) {
+        sem_post( modifyGrid );
+        return NULL;
+    }
+    
     if ( !firstPlayer ) {
         // If there is no firstPlayer, create firstPlayer
         firstPlayer = malloc( sizeof( firstPlayer ) );
+        firstPlayer = nextPlayerNumber;
+        nextPlayerNumber++;
         firstPlayer->x = x;
         firstPlayer->y = y;
         firstPlayer->next = NULL;
-        firstPlayer->prev = NULL;
     }
     else {
         // Otherwise, add new player to beginning of the list
         Player* newPlayer = malloc( sizeof( Player ) );
+        newPlayer = nextPlayerNumber;
+        nextPlayerNumber++;
         newPlayer->x = x;
         newPlayer->y = y;
-        newPlayer->prev = NULL;
         newPlayer->next = firstPlayer;
         firstPlayer = newPlayer;
     }
+    grid[x][y] = nextPlayerNumber;
     
-    // TODO: tell clients to update display
     notifyPlayersOfUpdate();
+    
     sem_post( modifyGrid );
 }
 
-void removePlayer( int x, int y ) {
+void removePlayer( int playerNumber ) {
     if ( players == 0 ) {
         return;
     }
@@ -113,99 +119,123 @@ void removePlayer( int x, int y ) {
 
     Player* toRemove;
     Player* player = firstPlayer;
-    while ( player ){
-        if ( player->x == x && player->y == y){
-          toRemove = player;
-        }
-    }
-
-    Player* nextPlayer = toRemove->next;
-    nextPlayer->prev = toRemove->prev;
-
-    Player* prevPlayer = toRemove->prev;
-    prevPlayer->next = toRemove->next;
-
-    free( toRemove );
-    
-    // TODO: tell clients to update display
-    notifyPlayersOfUpdate();
-    sem_post( modifyGrid );
-}
-
-// direction == 0 -> up
-// direction == 1 -> right
-// direction == 2 -> down
-// direction == 3 -> left
-void movePlayer( int x, int y, int direction ) {
-    sem_wait( modifyGrid );
-    
-    // getPlayer without sem_wait( modifyGrid ) and sem_post( modifyGrid )
-    Player* playerToMove = firstPlayer;
-    while ( playerToMove ) {
-        if ( playerToMove->x == x && playerToMove->y == y ) {
+    while ( player ) {
+        if ( player->playerNumber == playerNumber ) {
+            toRemove = player;
             break;
         }
     }
+
+    if ( toRemove ) {
+        Player* nextPlayer = toRemove->next;
+        prevPlayer->next = toRemove->next;
+        grid[toRemove->x][grid->toRemove->y] = TILE_GRASS;
+        
+        free( toRemove );
+        
+        notifyPlayersOfUpdate( 0 );
+    }
     
+    sem_post( modifyGrid );
+}
+
+void levelUp() {
+    for ( int x = 0; x < GRIDSIZE; x++ ) {
+        for ( int y = 0; y < GRIDSIZE; y++ ) {
+            double r = rand01();
+            if ( r < 0.1 && grid[x][y] == TILE_GRASS ) {
+                grid[x][y] = TILE_TOMATO;
+                numTomatoes++;
+            }
+            else {
+                grid[x][y] = TILE_GRASS;
+            }
+        }
+    }
+
+    if ( numTomatoes == 0 ) {
+        levelUp();
+    }
+}
+
+
+#define UP 0
+#define RIGHT 1
+#define DOWN 2
+#define LEFT 3
+void movePlayer( int playerNumber, int direction ) {
+    sem_wait( modifyGrid );
+    
+    Player* playerToMove = getPlayerByPlayerNumber( playerNumber );
     int success = 0;
     if ( playerToMove ) {
-        if ( direction == 0 && player->y > 0 && !getPlayer( x, y - 1 ) ) {
+        int playerPreviousX = player->x;
+        int playerPreviousY = player->y;
+        if ( direction == UP && player->y > 0 && grid[x][y - 1] < 2 ) {
             player->y--;
             success = 1;
         }
-        else if ( direction == 1 && player->x < GRIDSIZE - 1 && !getPlayer( x + 1, y ) ) {
+        else if ( direction == RIGHT && player->x < GRIDSIZE - 1 && grid[x + 1][y] < 2 ) {
             player->x++;
             success = 1;
         }
-        else if ( direction == 2 && player->y < GRIDSIZE - 1 && !getPlayer( x, y - 1 ) ) {
+        else if ( direction == DOWN && player->y < GRIDSIZE - 1 && grid[x][y + 1] < 2 ) {
             player->y--;
             success = 1;
         }
-        else if ( direction == 3 && player->x > 0 && !getPlayer( x, y - 1 ) ) {
+        else if ( direction == LEFT && player->x > 0 && grid[x - 1][y] < 2 ) {
             player->x--;
             success = 1;
         }
         
-        if ( success && grid[player->x][player->y] == TILE_TOMATO ) {
-            grid[player->x][player->y] = TILE_GRASS;
+        if ( success ) {
+            if ( grid[player->x][player->y] == TILE_TOMATO ) {
+                score++;
+                numTomatoes--;
+            }
+            grid[player->x][player->y] = player->playerNumber;
+            grid[playerPreviousX][playerPreviousY] = TILE_GRASS;
+            
+            if ( numTomatoes == 0 ) {
+                levelUp();
+            }
+
+            // tell clients to update display
+            notifyPlayersOfUpdate( 0 );
         }
     }
-    
-    // TODO: tell clients to update display
-    notifyPlayersOfUpdate();
     
     sem_post( modifyGrid );
 }
 
 char* gridToString() {
-    char output[GRIDSIZE * GRIDSIZE];
+    int output[GRIDSIZE * GRIDSIZE + 2];
     for ( int i = 0; i < GRIDSIZE; i++ ) {
         for ( int j = 0; j < GRIDSIZE; j++ ) {
-            if ( grid[i][j] == TILE_GRASS ) {
-                output[i * GRIDSIZE + j] = '0';
-            }
-            else {
-                output[i * GRIDSIZE + j] = '1';
-            }
+            output[i][j] = grid[i][j];
         }
     }
     
-    Player* player = firstPlayer;
-    while ( player ) {
-        output[player->x * GRIDSIZE + player->y] = '2';
-        player = player->next;
-    }
+    output[GRIDSIZE * GRIDSIZE] = level;
+    output[GRIDSIZE * GRIDSIZE] = score;
     
-    return output;
+    return (char*)output;
 }
 
 void notifyPlayersOfUpdate() {
+    char* gridToString = gridToString();
     for ( int i = 0; i < 8; i++ ) {
         if ( isActive[i] ) {
-            rio_writen( connfds[i], gridToString(), )
+            send( connfds[i], gridToString(), ( GRIDSIZE * GRIDSIZE + 2 ) * 4 );
         }
     }
 }
+
+#define MAX_CONNECTIONS 8
+int listenfd;
+pthread_t playerThreads[MAX_CONNECTIONS];
+int isConnectionActive[MAX_CONNECTIONS];
+int connfds[MAX_CONNECTIONS];
 
 void* playerThread( void* index ) {
     while ( 1 ) {
@@ -214,12 +244,12 @@ void* playerThread( void* index ) {
         struct sockaddr_storage clientaddr;
         int clientlen = sizeof( struct sockaddr_storage );
         int connfd = accept( listenfd, &clientaddr, &clientlen );
-        connfds[(int)i] = connfd;
+        connfds[(int)index] = connfd;
         
-        rio_t rio;
         char buf[MAXLINE];
-        rio_readinitb( &rio, connfd );
-        rio_readlineb( &rio, buf, MAXLINE );
+        read( connfd, buf, MAXLINE );
+        
+        sem_wait( modifyGrid );
         
         // add new player
         int x = 0; y = 0;
@@ -230,38 +260,58 @@ void* playerThread( void* index ) {
                 break;
             }
         }
-        addPlayer( x, y );
-        isActive[(int)i] = 1;
+        
+        int playerNumber;
+        if ( !firstPlayer ) {
+            // If there is no firstPlayer, create firstPlayer
+            firstPlayer = malloc( sizeof( firstPlayer ) );
+            firstPlayer = nextPlayerNumber;
+            playerNumber = nextPlayerNumber;
+            nextPlayerNumber++;
+            firstPlayer->x = x;
+            firstPlayer->y = y;
+            firstPlayer->next = NULL;
+        }
+        else {
+            // Otherwise, add new player to beginning of the list
+            Player* newPlayer = malloc( sizeof( Player ) );
+            newPlayer = nextPlayerNumber;
+            playerNumber = nextPlayerNumber;
+            nextPlayerNumber++;
+            newPlayer->x = x;
+            newPlayer->y = y;
+            newPlayer->next = firstPlayer;
+            firstPlayer = newPlayer;
+        }
+        grid[x][y] = nextPlayerNumber;
+        notifyPlayersOfUpdate();
+        
+        sem_post( modifyGrid );
+        
+        isConnectionActive[(int)i] = 1;
         int direction = 0;
         while ( 1 ) {
             // receive input from client
-            int n = rio_readlineb( &rio, buf, MAXLINE );
+            int n = recv( connfd, buf, MAXLINE );
             if ( n == 0 ) {
                 break;
             }
-            x = atoi( buf );
-            rio_readlineb( &rio, buf, MAXLINE );
-            y = atoi( buf );
-            rio_readlineb( &rio, buf, MAXLINE );
-            direction = atoi( buf );
             
-            movePlayer( x, y, direction );
+            recv( connfd, buf, MAXLINE );
+            int direction = atoi( buf );
+            movePlayer( playerNumber, direction );
         }
         
-        isActive[(int)i] = 0;
+        isConnectionActive[(int)index] = 0;
         removePlayer( x, y );
         close( connfd );
-        connfds[i] = -1;
+        connfds[(int)index] = -1;
     }
     return NULL;
 }
 
 typedef struct addrinfo addrinfo;
 
-int listenfd;
-pthread_t playerThreads[8];
-int isActive[8];
-int connfds[8];
 int main() {
     sem_init( &modifyGrid, 0, 1 );
     initGrid();
@@ -270,7 +320,7 @@ int main() {
     addrinfo* addrinfo;
     getaddrinfo( "localhost", "49494", NULL, &addrinfo );
     addrinfo* ptr;
-    while ( ptr = addrinfo; ptr != NULL; ptr = addrinfo->ai_next ) {
+    for ( ptr = addrinfo; ptr != NULL; ptr = addrinfo->ai_next ) {
         listenfd = socket( ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol );
         if ( listenfd < 0 ) {
             continue;
