@@ -97,7 +97,7 @@ int isConnectionActive[MAX_CONNECTIONS];
 int connfds[MAX_CONNECTIONS];
 void notifyPlayersOfUpdate() {
     char* gridString = gridToString();
-    for ( int i = 0; i < 8; i++ ) {
+    for ( int i = 0; i < MAX_CONNECTIONS; i++ ) {
         if ( isConnectionActive[i] ) {
             send( connfds[i], gridString, ( GRIDSIZE * GRIDSIZE + 2 ) * 4, 0 );
         }
@@ -315,7 +315,7 @@ int main( int argc, char** argv ) {
         exit( 0 );
     }
     
-    for ( long i = 0; i < 8; i++ ) {
+    for ( long i = 0; i < MAX_CONNECTIONS; i++ ) {
         connfds[i] = -1;
         pthread_create( &playerThreads[i], NULL, playerThread, (void*) i );
         pthread_join( playerThreads[i], NULL );
