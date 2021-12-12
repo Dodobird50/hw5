@@ -14,7 +14,7 @@ runclient: $(OUTPUT)
 	LD_LIBRARY_PATH=lib ./client
 
 client: client.o
-	gcc $(CFLAGS) -o $@ $^ $(LFLAGS)
+	gcc $(CFLAGS) -pthread -o $@ $^ $(LFLAGS)
 
 server: server.c
 	gcc $(CFLAGS) -pthread -o $@ $^

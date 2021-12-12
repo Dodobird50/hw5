@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <time.h>
+#include <string.h>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
@@ -9,7 +10,9 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <pthread.h>
 #include <netdb.h>
+#include <netinet/in.h>
 
 // Dimensions for the drawn grid (should be GRIDSIZE * texture dimensions)
 #define GRID_DRAW_WIDTH 640
@@ -54,6 +57,7 @@ void initSDL() {
 }
 
 
+int clientfd;
 // TODO
 void handleKeyDown(SDL_KeyboardEvent* event)
 {
@@ -66,15 +70,17 @@ void handleKeyDown(SDL_KeyboardEvent* event)
     }
 
     if (event->keysym.scancode == SDL_SCANCODE_UP || event->keysym.scancode == SDL_SCANCODE_W) {
-        
+        send( clientfd, "0", 2, 0 );
+    }
+    if (event->keysym.scancode == SDL_SCANCODE_RIGHT || event->keysym.scancode == SDL_SCANCODE_D) {
+        send( clientfd, "1", 2, 0 );
     }
     if (event->keysym.scancode == SDL_SCANCODE_DOWN || event->keysym.scancode == SDL_SCANCODE_S) {
-        
+        send( clientfd, "2", 2, 0 );
     }
     if (event->keysym.scancode == SDL_SCANCODE_LEFT || event->keysym.scancode == SDL_SCANCODE_A) {
+        send( clientfd, "3", 2, 0 );
     }        
-    if (event->keysym.scancode == SDL_SCANCODE_RIGHT || event->keysym.scancode == SDL_SCANCODE_D) {
-    }
 }
 
 void processInputs() {
@@ -109,12 +115,15 @@ void drawGrid( SDL_Renderer* renderer, SDL_Texture* grassTexture, SDL_Texture* t
             SDL_Texture* texture;
             if ( data[i * GRIDSIZE + j] == TILE_GRASS ) {
                 texture = grassTexture;
+                // printf( "grass\n" );
             }
-            if ( data[i * GRIDSIZE + j] == TILE_TOMATO ) {
+            else if ( data[i * GRIDSIZE + j] == TILE_TOMATO ) {
                 texture = tomatoTexture;
+                // printf( "tomato\n" );
             }
             else {
                 texture = playerTexture;
+                // printf( "player\n" );
             }
             // SDL_Texture* texture = (grid[i][j] == TILE_GRASS) ? grassTexture : tomatoTexture;
             SDL_QueryTexture(texture, NULL, NULL, &dest.w, &dest.h);
@@ -165,6 +174,19 @@ void* getPlayerInput( void* i ) {
     }
 }
 
+int connected = 0;
+void* waitConnected( void* i ) {
+    sleep( 10 );
+    
+    if ( !connected ) {
+        printf( "Unable to connect to server\n" );
+        exit( 0 );
+    }
+    
+    return NULL;
+}
+
+
 typedef struct addrinfo addrinfo;
 int main(int argc, char* argv[]) {
     if ( argc == 1 ) {
@@ -202,10 +224,15 @@ int main(int argc, char* argv[]) {
 
     addrinfo hints;
     memset( &hints, 0, sizeof( addrinfo ) );
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    pthread_t waitConnectedThread;
+    pthread_create( &waitConnectedThread, NULL, waitConnected, NULL );
 
     addrinfo* addrinfo;
-    getaddrinfo( argv[1], NULL, &hints, &addrinfo );
-    int clientfd;
+    getaddrinfo( "localhost", argv[1], &hints, &addrinfo );
+    
     for ( struct addrinfo* ptr = addrinfo; ptr != NULL; ptr = ptr->ai_next ) {
         clientfd = socket( ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol );
         if ( clientfd < 0 ) {
@@ -213,6 +240,7 @@ int main(int argc, char* argv[]) {
         }
         
         if ( connect( clientfd, ptr->ai_addr, ptr->ai_addrlen ) != -1 ) {
+            printf( "Successfully connected to server\n" );
             break;
         }
         
@@ -226,9 +254,10 @@ int main(int argc, char* argv[]) {
     }
 
     send( clientfd, "hello", 6, 0 );
-    pthread_t userThread;
-    pthread_create( userThread, NULL, getPlayerInput, NULL );
-    pthread_join( userThread, NULL );
+    connected = 1;
+    
+    pthread_t getPlayerInputThread;
+    pthread_create( &getPlayerInputThread, NULL, getPlayerInput, NULL );
     
     // main game loop
     char buf[( GRIDSIZE * GRIDSIZE + 2 ) * 4];

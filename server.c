@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <string.h>
 #include <time.h>
 
 #include <sys/socket.h>
@@ -8,6 +9,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <netdb.h>
+#include <netinet/in.h>
 
 // Dimensions for the drawn grid (should be GRIDSIZE * texture dimensions)
 #define GRID_DRAW_WIDTH 640
@@ -127,7 +129,7 @@ void removePlayer( int playerNumber ) {
         
         free( toRemove );
         
-        notifyPlayersOfUpdate( 0 );
+        notifyPlayersOfUpdate();
     }
     
     sem_post( &modifyGrid );
@@ -140,9 +142,6 @@ void levelUp() {
             if ( r < 0.1 && grid[x][y] == TILE_GRASS ) {
                 grid[x][y] = TILE_TOMATO;
                 numTomatoes++;
-            }
-            else {
-                grid[x][y] = TILE_GRASS;
             }
         }
     }
@@ -168,18 +167,22 @@ void movePlayer( int playerNumber, int direction ) {
         if ( direction == UP && playerToMove->y > 0 && grid[playerToMove->x][playerToMove->y - 1] < 2 ) {
             playerToMove->y--;
             success = 1;
+            printf( "Player moved up\n" );
         }
         else if ( direction == RIGHT && playerToMove->x < GRIDSIZE - 1 && grid[playerToMove->x + 1][playerToMove->y] < 2 ) {
             playerToMove->x++;
             success = 1;
+            printf( "Player moved right\n" );
         }
         else if ( direction == DOWN && playerToMove->y < GRIDSIZE - 1 && grid[playerToMove->x][playerToMove->y + 1] < 2 ) {
-            playerToMove->y--;
+            playerToMove->y++;
             success = 1;
+            printf( "Player moved down\n" );
         }
         else if ( direction == LEFT && playerToMove->x > 0 && grid[playerToMove->x - 1][playerToMove->y] < 2 ) {
             playerToMove->x--;
             success = 1;
+            printf( "Player moved left\n" );
         }
         
         if ( success ) {
@@ -195,28 +198,25 @@ void movePlayer( int playerNumber, int direction ) {
             }
 
             // tell clients to update display
-            notifyPlayersOfUpdate( 0 );
+            notifyPlayersOfUpdate();
         }
     }
     
     sem_post( &modifyGrid );
 }
 
-
-
-
 int listenfd;
 pthread_t playerThreads[MAX_CONNECTIONS];
 void* playerThread( void* index ) {
     while ( 1 ) {
         // accept connection
-        listen( listenfd, 0 );
+        listen( listenfd, 1000 );
         struct sockaddr clientaddr;
         socklen_t clientlen = sizeof( struct sockaddr );
         int connfd = accept( listenfd, &clientaddr, &clientlen );
+        isConnectionActive[(long)index] = 1;
+        printf( "Successfully accepted connection from client\n" );
         connfds[(long)index] = connfd;
-        
-        printf( "Accepted connection\n" );
         
         char buf[10];
         read( connfd, buf, 10 );
@@ -256,11 +256,10 @@ void* playerThread( void* index ) {
             firstPlayer = newPlayer;
         }
         grid[x][y] = nextPlayerNumber;
+        
         notifyPlayersOfUpdate();
         
         sem_post( &modifyGrid );
-        
-        isConnectionActive[(long)index] = 1;
         while ( 1 ) {
             // receive input from client
             int n = recv( connfd, buf, 5, 0 );
@@ -271,6 +270,7 @@ void* playerThread( void* index ) {
             int direction = atoi( buf );
             movePlayer( playerNumber, direction );
         }
+        printf( "Connection dropped\n" );
         
         isConnectionActive[(long)index] = 0;
         removePlayer( playerNumber );
@@ -282,15 +282,26 @@ void* playerThread( void* index ) {
 
 typedef struct addrinfo addrinfo;
 
-int main() {
+int main( int argc, char** argv ) {
+    if ( argc == 1 ) {
+        printf( "Please specify a port number\n" );
+        exit( 0 );
+    }
+    
     sem_init( &modifyGrid, 0, 1 );
     initGrid();
     
+    addrinfo hints;
+    memset( &hints, 0, sizeof( addrinfo ) );
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE | AI_ADDRCONFIG;
+    hints.ai_flags |= AI_NUMERICSERV;
+    
     // setup server
     addrinfo* addrinfo;
-    getaddrinfo( "localhost", "49494", NULL, &addrinfo );
+    getaddrinfo( NULL, argv[1], &hints, &addrinfo );
     struct addrinfo* ptr;
-    for ( ptr = addrinfo; ptr != NULL; ptr = addrinfo->ai_next ) {
+    for ( ptr = addrinfo; ptr != NULL; ptr = ptr->ai_next ) {
         listenfd = socket( ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol );
         if ( listenfd < 0 ) {
             continue;
