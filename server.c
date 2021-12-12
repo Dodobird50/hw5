@@ -87,7 +87,7 @@ char* gridToString() {
     }
     
     output[GRIDSIZE * GRIDSIZE] = level;
-    output[GRIDSIZE * GRIDSIZE] = score;
+    output[GRIDSIZE * GRIDSIZE + 1] = score;
     
     return (char*)output;
 }
@@ -167,22 +167,18 @@ void movePlayer( int playerNumber, int direction ) {
         if ( direction == UP && playerToMove->y > 0 && grid[playerToMove->x][playerToMove->y - 1] < 2 ) {
             playerToMove->y--;
             success = 1;
-            printf( "Player moved up\n" );
         }
         else if ( direction == RIGHT && playerToMove->x < GRIDSIZE - 1 && grid[playerToMove->x + 1][playerToMove->y] < 2 ) {
             playerToMove->x++;
             success = 1;
-            printf( "Player moved right\n" );
         }
         else if ( direction == DOWN && playerToMove->y < GRIDSIZE - 1 && grid[playerToMove->x][playerToMove->y + 1] < 2 ) {
             playerToMove->y++;
             success = 1;
-            printf( "Player moved down\n" );
         }
         else if ( direction == LEFT && playerToMove->x > 0 && grid[playerToMove->x - 1][playerToMove->y] < 2 ) {
             playerToMove->x--;
             success = 1;
-            printf( "Player moved left\n" );
         }
         
         if ( success ) {
@@ -194,6 +190,7 @@ void movePlayer( int playerNumber, int direction ) {
             grid[playerPreviousX][playerPreviousY] = TILE_GRASS;
             
             if ( numTomatoes == 0 ) {
+                level++;
                 levelUp();
             }
 

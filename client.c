@@ -136,8 +136,8 @@ void drawUI(SDL_Renderer* renderer, int* data ) {
     // largest score/level supported is 2147483647
     char scoreStr[18];
     char levelStr[18];
-    int score = data[GRIDSIZE * GRIDSIZE];
-    int level = data[GRIDSIZE * GRIDSIZE + 1];
+    int score = data[GRIDSIZE * GRIDSIZE + 1];
+    int level = data[GRIDSIZE * GRIDSIZE];
     sprintf(scoreStr, "Score: %d", score);
     sprintf(levelStr, "Level: %d", level);
 
