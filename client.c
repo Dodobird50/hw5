@@ -62,8 +62,9 @@ int clientfd;
 void handleKeyDown(SDL_KeyboardEvent* event)
 {
     // ignore repeat events if key is held down
-    if (event->repeat)
+    if (event->repeat) {
         return;
+    }
 
     if (event->keysym.scancode == SDL_SCANCODE_Q || event->keysym.scancode == SDL_SCANCODE_ESCAPE) {
         shouldExit = true;
@@ -174,6 +175,28 @@ void* getPlayerInput( void* i ) {
     }
 }
 
+SDL_Window* window;
+SDL_Renderer* renderer;
+SDL_Texture *grassTexture;
+SDL_Texture *tomatoTexture;
+SDL_Texture *playerTexture;
+
+void* getUpdatesFromServer( void* i ) {
+    char buf[( GRIDSIZE * GRIDSIZE + 2 ) * 4];
+    while ( 1 ) {
+        SDL_SetRenderDrawColor(renderer, 0, 105, 6, 255);
+        SDL_RenderClear(renderer);
+
+        recv( clientfd, buf, ( GRIDSIZE * GRIDSIZE + 2 ) * 4, 0 );
+        int* data = (int*) buf;
+        drawGrid( renderer, grassTexture, tomatoTexture, playerTexture, data );
+        drawUI( renderer, data );
+
+        SDL_RenderPresent( renderer );
+        SDL_Delay( 16 ); // 16 ms delay to limit display to 60 fps
+    }
+}
+
 int connected = 0;
 void* waitConnected( void* i ) {
     sleep( 10 );
@@ -204,23 +227,23 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    SDL_Window* window = SDL_CreateWindow("Client", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, 0);
+    window = SDL_CreateWindow("Client", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, 0);
 
     if (window == NULL) {
         fprintf(stderr, "Error creating app window: %s\n", SDL_GetError());
         exit(EXIT_FAILURE);
     }
 
-    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, 0);
+    renderer = SDL_CreateRenderer(window, -1, 0);
 
 	if (renderer == NULL) {
 		fprintf(stderr, "Error creating renderer: %s\n", SDL_GetError());
         exit(EXIT_FAILURE);
 	}
 
-    SDL_Texture *grassTexture = IMG_LoadTexture(renderer, "resources/grass.png");
-    SDL_Texture *tomatoTexture = IMG_LoadTexture(renderer, "resources/tomato.png");
-    SDL_Texture *playerTexture = IMG_LoadTexture(renderer, "resources/player.png");
+    grassTexture = IMG_LoadTexture(renderer, "resources/grass.png");
+    tomatoTexture = IMG_LoadTexture(renderer, "resources/tomato.png");
+    playerTexture = IMG_LoadTexture(renderer, "resources/player.png");
 
     addrinfo hints;
     memset( &hints, 0, sizeof( addrinfo ) );
@@ -256,22 +279,11 @@ int main(int argc, char* argv[]) {
     send( clientfd, "hello", 6, 0 );
     connected = 1;
     
-    pthread_t getPlayerInputThread;
-    pthread_create( &getPlayerInputThread, NULL, getPlayerInput, NULL );
+    pthread_t getUpdatesFromServerThread;
+    pthread_create( &getUpdatesFromServerThread, NULL, getUpdatesFromServer, NULL );
     
-    // main game loop
-    char buf[( GRIDSIZE * GRIDSIZE + 2 ) * 4];
     while ( !shouldExit ) {
-        SDL_SetRenderDrawColor(renderer, 0, 105, 6, 255);
-        SDL_RenderClear(renderer);
-
-        recv( clientfd, buf, ( GRIDSIZE * GRIDSIZE + 2 ) * 4, 0 );
-        int* data = (int*) buf;
-        drawGrid( renderer, grassTexture, tomatoTexture, playerTexture, data );
-        drawUI( renderer, data );
-
-        SDL_RenderPresent( renderer );
-        SDL_Delay( 16 ); // 16 ms delay to limit display to 60 fps
+        processInputs();
     }
 
     // clean up everything
