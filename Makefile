@@ -1,4 +1,4 @@
-OUTPUT = client
+OUTPUT = client server
 CFLAGS = -g -Wall -Wvla -I inc -D_REENTRANT
 LFLAGS = -L lib -lSDL2 -lSDL2_image -lSDL2_ttf
 
@@ -15,6 +15,9 @@ runclient: $(OUTPUT)
 
 client: client.o
 	gcc $(CFLAGS) -o $@ $^ $(LFLAGS)
+
+server: server.c
+	gcc $(CFLAGS) -pthread -o $@ $^
 
 clean:
 	rm -f $(OUTPUT) *.o

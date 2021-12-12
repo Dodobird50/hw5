@@ -6,6 +6,11 @@
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 
+#include <sys/socket.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <netdb.h>
+
 // Dimensions for the drawn grid (should be GRIDSIZE * texture dimensions)
 #define GRID_DRAW_WIDTH 640
 #define GRID_DRAW_HEIGHT 640
@@ -18,6 +23,8 @@
 
 // Number of cells vertically/horizontally in the grid
 #define GRIDSIZE 10
+#define TILE_GRASS 0
+#define TILE_TOMATO 1
 
 bool shouldExit = false;
 
@@ -91,7 +98,7 @@ void processInputs() {
 }
 
 // TODO
-void drawGrid( SDL_Renderer* renderer, SDL_Texture* grassTexture, SDL_Texture* tomatoTexture, SDL_Texture* playerTexture, int[] data ) {
+void drawGrid( SDL_Renderer* renderer, SDL_Texture* grassTexture, SDL_Texture* tomatoTexture, SDL_Texture* playerTexture, int* data ) {
     SDL_Rect dest;
     
     for (int i = 0; i < GRIDSIZE; i++) {
@@ -104,7 +111,7 @@ void drawGrid( SDL_Renderer* renderer, SDL_Texture* grassTexture, SDL_Texture* t
                 texture = grassTexture;
             }
             if ( data[i * GRIDSIZE + j] == TILE_TOMATO ) {
-                texture = toamtoTexture;
+                texture = tomatoTexture;
             }
             else {
                 texture = playerTexture;
@@ -116,7 +123,7 @@ void drawGrid( SDL_Renderer* renderer, SDL_Texture* grassTexture, SDL_Texture* t
     }
 }
 
-void drawUI(SDL_Renderer* renderer, int[] data ) {
+void drawUI(SDL_Renderer* renderer, int* data ) {
     // largest score/level supported is 2147483647
     char scoreStr[18];
     char levelStr[18];
@@ -152,12 +159,20 @@ void drawUI(SDL_Renderer* renderer, int[] data ) {
     SDL_DestroyTexture(levelTexture);
 }
 
+void* getPlayerInput( void* i ) {
+    while( 1 ) {
+        processInputs();
+    }
+}
 
 typedef struct addrinfo addrinfo;
 int main(int argc, char* argv[]) {
+    if ( argc == 1 ) {
+        printf( "Please specify a port number\n" );
+        exit( 0 );
+    }
+    
     srand(time(NULL));
-
-    level = 1;
 
     initSDL();
 
@@ -185,16 +200,19 @@ int main(int argc, char* argv[]) {
     SDL_Texture *tomatoTexture = IMG_LoadTexture(renderer, "resources/tomato.png");
     SDL_Texture *playerTexture = IMG_LoadTexture(renderer, "resources/player.png");
 
+    addrinfo hints;
+    memset( &hints, 0, sizeof( addrinfo ) );
+
     addrinfo* addrinfo;
-    getaddrinfo( argv[1], NULL, NULL, &addrinfo );
+    getaddrinfo( argv[1], NULL, &hints, &addrinfo );
     int clientfd;
-    for ( addrinfo* ptr = addrinfo; ptr != NULL; ptr = ptr->ai_next ) {
+    for ( struct addrinfo* ptr = addrinfo; ptr != NULL; ptr = ptr->ai_next ) {
         clientfd = socket( ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol );
         if ( clientfd < 0 ) {
             continue;
         }
         
-        if ( connect( clientfd, p->ai_addr, p->ai_addrlen ) != -1 ) {
+        if ( connect( clientfd, ptr->ai_addr, ptr->ai_addrlen ) != -1 ) {
             break;
         }
         
@@ -207,24 +225,24 @@ int main(int argc, char* argv[]) {
         exit( 0 );
     }
 
-    send( clientfd, "hello", 6 );
+    send( clientfd, "hello", 6, 0 );
+    pthread_t userThread;
+    pthread_create( userThread, NULL, getPlayerInput, NULL );
+    pthread_join( userThread, NULL );
     
-
     // main game loop
     char buf[( GRIDSIZE * GRIDSIZE + 2 ) * 4];
-    while (!shouldExit) {
+    while ( !shouldExit ) {
         SDL_SetRenderDrawColor(renderer, 0, 105, 6, 255);
         SDL_RenderClear(renderer);
 
-        recv( clientfd, buf, ( GRIDSIZE * GRIDSIZE + 2 ) * 4 );
+        recv( clientfd, buf, ( GRIDSIZE * GRIDSIZE + 2 ) * 4, 0 );
         int* data = (int*) buf;
         drawGrid( renderer, grassTexture, tomatoTexture, playerTexture, data );
-        drawUI( renderer );
+        drawUI( renderer, data );
 
         SDL_RenderPresent( renderer );
         SDL_Delay( 16 ); // 16 ms delay to limit display to 60 fps
-        
-        processInputs();
     }
 
     // clean up everything
