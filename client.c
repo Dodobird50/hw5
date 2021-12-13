@@ -72,15 +72,19 @@ void handleKeyDown(SDL_KeyboardEvent* event)
 
     if (event->keysym.scancode == SDL_SCANCODE_UP || event->keysym.scancode == SDL_SCANCODE_W) {
         send( clientfd, "0", 2, 0 );
+        printf( "Player tried to move up\n" );
     }
     if (event->keysym.scancode == SDL_SCANCODE_RIGHT || event->keysym.scancode == SDL_SCANCODE_D) {
         send( clientfd, "1", 2, 0 );
+        printf( "Player tried to move right\n" );
     }
     if (event->keysym.scancode == SDL_SCANCODE_DOWN || event->keysym.scancode == SDL_SCANCODE_S) {
         send( clientfd, "2", 2, 0 );
+        printf( "Player tried to move down\n" );
     }
     if (event->keysym.scancode == SDL_SCANCODE_LEFT || event->keysym.scancode == SDL_SCANCODE_A) {
         send( clientfd, "3", 2, 0 );
+        printf( "Player tried to move left\n" );
     }        
 }
 
@@ -187,7 +191,17 @@ void* getUpdatesFromServer( void* i ) {
         SDL_SetRenderDrawColor(renderer, 0, 105, 6, 255);
         SDL_RenderClear(renderer);
 
-        recv( clientfd, buf, ( GRIDSIZE * GRIDSIZE + 2 ) * 4, 0 );
+        int n = recv( clientfd, buf, ( GRIDSIZE * GRIDSIZE + 2 ) * 4, 0 );
+        if ( n <= 0 ) {
+            printf( "Server shut down\n" );
+            exit( 0 );
+        }
+        
+        if ( strcmp( buf, "Unable to accept connection from client." ) == 0 ) {
+            printf( "Sorry! Current room is full.\n" );
+            exit( 0 );
+        }
+        
         int* data = (int*) buf;
         drawGrid( renderer, grassTexture, tomatoTexture, playerTexture, data );
         drawUI( renderer, data );
@@ -199,7 +213,7 @@ void* getUpdatesFromServer( void* i ) {
 
 int connected = 0;
 void* waitConnected( void* i ) {
-    sleep( 10 );
+    sleep( 5 );
     
     if ( !connected ) {
         printf( "Unable to connect to server\n" );
@@ -263,7 +277,7 @@ int main(int argc, char* argv[]) {
         }
         
         if ( connect( clientfd, ptr->ai_addr, ptr->ai_addrlen ) != -1 ) {
-            printf( "Successfully connected to server\n" );
+            // printf( "Successfully connected to server\n" );
             break;
         }
         
@@ -276,7 +290,6 @@ int main(int argc, char* argv[]) {
         exit( 0 );
     }
 
-    send( clientfd, "hello", 6, 0 );
     connected = 1;
     
     pthread_t getUpdatesFromServerThread;

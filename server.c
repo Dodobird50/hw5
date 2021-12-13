@@ -74,6 +74,8 @@ Player* getPlayerByPlayerNumber( int playerNumber ) {
         if ( player->playerNumber == playerNumber ) {
             return player;
         }
+        
+        player = player->next;
     }
     return NULL;
 }
@@ -93,12 +95,11 @@ char* gridToString() {
 }
 
 #define MAX_CONNECTIONS 8
-int isConnectionActive[MAX_CONNECTIONS];
 int connfds[MAX_CONNECTIONS];
 void notifyPlayersOfUpdate() {
     char* gridString = gridToString();
     for ( int i = 0; i < MAX_CONNECTIONS; i++ ) {
-        if ( isConnectionActive[i] ) {
+        if ( connfds[i] >= 0 ) {
             send( connfds[i], gridString, ( GRIDSIZE * GRIDSIZE + 2 ) * 4, 0 );
         }
     }
@@ -123,6 +124,9 @@ void removePlayer( int playerNumber ) {
     if ( toRemove ) {
         if ( prevPlayer ) {
             prevPlayer->next = toRemove->next;
+        }
+        if ( toRemove == firstPlayer ) {
+            firstPlayer = NULL;
         }
         
         grid[toRemove->x][toRemove->y] = TILE_GRASS;
@@ -151,7 +155,6 @@ void levelUp() {
     }
 }
 
-
 #define UP 0
 #define RIGHT 1
 #define DOWN 2
@@ -167,18 +170,22 @@ void movePlayer( int playerNumber, int direction ) {
         if ( direction == UP && playerToMove->y > 0 && grid[playerToMove->x][playerToMove->y - 1] < 2 ) {
             playerToMove->y--;
             success = 1;
+            // printf( "Player %d moved up\n", playerNumber );
         }
         else if ( direction == RIGHT && playerToMove->x < GRIDSIZE - 1 && grid[playerToMove->x + 1][playerToMove->y] < 2 ) {
             playerToMove->x++;
             success = 1;
+            // printf( "Player %d moved right\n", playerNumber );
         }
         else if ( direction == DOWN && playerToMove->y < GRIDSIZE - 1 && grid[playerToMove->x][playerToMove->y + 1] < 2 ) {
             playerToMove->y++;
             success = 1;
+            // printf( "Player %d moved down\n", playerNumber );
         }
         else if ( direction == LEFT && playerToMove->x > 0 && grid[playerToMove->x - 1][playerToMove->y] < 2 ) {
             playerToMove->x--;
             success = 1;
+            // printf( "Player %d moved left\n", playerNumber );
         }
         
         if ( success ) {
@@ -204,76 +211,68 @@ void movePlayer( int playerNumber, int direction ) {
 
 int listenfd;
 pthread_t playerThreads[MAX_CONNECTIONS];
+sem_t modifyConnfds;
 void* playerThread( void* index ) {
-    while ( 1 ) {
-        // accept connection
-        listen( listenfd, 1000 );
-        struct sockaddr clientaddr;
-        socklen_t clientlen = sizeof( struct sockaddr );
-        int connfd = accept( listenfd, &clientaddr, &clientlen );
-        isConnectionActive[(long)index] = 1;
-        printf( "Successfully accepted connection from client\n" );
-        connfds[(long)index] = connfd;
-        
-        char buf[10];
-        read( connfd, buf, 10 );
-        
-        sem_wait( &modifyGrid );
-        
-        // add new player
-        int x = 0, y = 0;
-        for ( int i = 0; i < GRIDSIZE * GRIDSIZE; i++ ) {
-            if ( grid[i / GRIDSIZE][i % GRIDSIZE] == TILE_GRASS ) {
-                x = i / GRIDSIZE;
-                y = i % GRIDSIZE;
-                break;
-            }
+    char buf[10];
+    
+    sem_wait( &modifyGrid );
+    // add new player
+    int x = 0, y = 0;
+    for ( int i = 0; i < GRIDSIZE * GRIDSIZE; i++ ) {
+        if ( grid[i / GRIDSIZE][i % GRIDSIZE] == TILE_GRASS ) {
+            x = i / GRIDSIZE;
+            y = i % GRIDSIZE;
+            break;
         }
-        
-        int playerNumber;
-        if ( !firstPlayer ) {
-            // If there is no firstPlayer, create firstPlayer
-            firstPlayer = malloc( sizeof( firstPlayer ) );
-            firstPlayer->playerNumber = nextPlayerNumber;
-            playerNumber = nextPlayerNumber;
-            nextPlayerNumber++;
-            firstPlayer->x = x;
-            firstPlayer->y = y;
-            firstPlayer->next = NULL;
-        }
-        else {
-            // Otherwise, add new player to beginning of the list
-            Player* newPlayer = malloc( sizeof( Player ) );
-            newPlayer->playerNumber = nextPlayerNumber;
-            playerNumber = nextPlayerNumber;
-            nextPlayerNumber++;
-            newPlayer->x = x;
-            newPlayer->y = y;
-            newPlayer->next = firstPlayer;
-            firstPlayer = newPlayer;
-        }
-        grid[x][y] = nextPlayerNumber;
-        
-        notifyPlayersOfUpdate();
-        
-        sem_post( &modifyGrid );
-        while ( 1 ) {
-            // receive input from client
-            int n = recv( connfd, buf, 5, 0 );
-            if ( n == 0 ) {
-                break;
-            }
-            
-            int direction = atoi( buf );
-            movePlayer( playerNumber, direction );
-        }
-        printf( "Connection dropped\n" );
-        
-        isConnectionActive[(long)index] = 0;
-        removePlayer( playerNumber );
-        close( connfd );
-        connfds[(long)index] = -1;
     }
+    
+    int playerNumber;
+    if ( !firstPlayer ) {
+        // If there is no firstPlayer, create firstPlayer
+        firstPlayer = malloc( sizeof( firstPlayer ) );
+        firstPlayer->playerNumber = nextPlayerNumber;
+        playerNumber = nextPlayerNumber;
+        nextPlayerNumber++;
+        firstPlayer->x = x;
+        firstPlayer->y = y;
+        firstPlayer->next = NULL;
+    }
+    else {
+        // Otherwise, add new player to beginning of the list
+        Player* newPlayer = malloc( sizeof( Player ) );
+        newPlayer->playerNumber = nextPlayerNumber;
+        playerNumber = nextPlayerNumber;
+        nextPlayerNumber++;
+        newPlayer->x = x;
+        newPlayer->y = y;
+        newPlayer->next = firstPlayer;
+        firstPlayer = newPlayer;
+    }
+    // printf( "Successfully accepted connection from client with player number %d\n", playerNumber );
+    grid[x][y] = nextPlayerNumber;
+    
+    notifyPlayersOfUpdate();
+    
+    sem_post( &modifyGrid );
+    while ( 1 ) {
+        // receive input from client
+        int n = recv( connfds[(long)index], buf, 5, 0 );
+        if ( n <= 0 ) {
+            break;
+        }
+        
+        int direction = atoi( buf );
+        movePlayer( playerNumber, direction );
+    }
+    
+    removePlayer( playerNumber );
+    
+    sem_wait( &modifyConnfds );
+    // printf( "Connection dropped\n" );
+    close( connfds[(long)index] );
+    connfds[(long)index] = -1;
+    sem_post( &modifyConnfds );
+    
     return NULL;
 }
 
@@ -311,13 +310,38 @@ int main( int argc, char** argv ) {
     }
     freeaddrinfo( addrinfo );
     if ( listenfd < 0 ) {
-        printf( "server setup failed\n" );
+        // printf( "server setup failed\n" );
         exit( 0 );
     }
     
-    for ( long i = 0; i < MAX_CONNECTIONS; i++ ) {
+    for ( int i = 0; i < MAX_CONNECTIONS; i++ ) {
         connfds[i] = -1;
-        pthread_create( &playerThreads[i], NULL, playerThread, (void*) i );
-        pthread_join( playerThreads[i], NULL );
+    }
+    sem_init( &modifyConnfds, 0, 1 );
+    while ( 1 ) {
+        listen( listenfd, 1000 );
+        struct sockaddr clientaddr;
+        socklen_t clientlen = sizeof( struct sockaddr );
+        int connfd = accept( listenfd, &clientaddr, &clientlen );
+        
+        // printf( "Attempting to accept connection from client\n" );
+        sem_wait( &modifyConnfds );
+        int success = 0;
+        for ( long i = 0; i < MAX_CONNECTIONS; i++ ) {
+            if ( connfds[i] == -1 ) {
+                connfds[i] = connfd;
+                pthread_create( &playerThreads[i], NULL, playerThread, (void*) i );
+                success = 1;
+                break;
+            }
+        }
+        
+        if ( !success ) {
+            // printf( "Unable to accept connection from client.\n" );
+            char message[50] = "Unable to accept connection from client.";
+            send( connfd, message, strlen( message ) + 1, 0 );
+            close( connfd );
+        }
+        sem_post( &modifyConnfds );
     }
 }
