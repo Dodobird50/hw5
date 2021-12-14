@@ -33,58 +33,53 @@ bool shouldExit = false;
 
 TTF_Font* font;
 
-// get a random value in the range [0, 1]
-double rand01() {
-    return (double) rand() / (double) RAND_MAX;
-}
-
 void initSDL() {
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        fprintf(stderr, "Error initializing SDL: %s\n", SDL_GetError());
+    if ( SDL_Init( SDL_INIT_VIDEO ) < 0 ) {
+        fprintf( stderr, "Error initializing SDL: %s\n", SDL_GetError() );
+        exit( EXIT_FAILURE );
+    }
+
+    int rv = IMG_Init( IMG_INIT_PNG );
+    if ( ( rv & IMG_INIT_PNG ) != IMG_INIT_PNG ) {
+        fprintf( stderr, "Error initializing IMG: %s\n", IMG_GetError() );
         exit(EXIT_FAILURE);
     }
 
-    int rv = IMG_Init(IMG_INIT_PNG);
-    if ((rv & IMG_INIT_PNG) != IMG_INIT_PNG) {
-        fprintf(stderr, "Error initializing IMG: %s\n", IMG_GetError());
-        exit(EXIT_FAILURE);
-    }
-
-    if (TTF_Init() == -1) {
-        fprintf(stderr, "Error initializing TTF: %s\n", TTF_GetError());
-        exit(EXIT_FAILURE);
+    if ( TTF_Init() == -1 ) {
+        fprintf( stderr, "Error initializing TTF: %s\n", TTF_GetError() );
+        exit( EXIT_FAILURE );
     }
 }
 
 
 int clientfd;
 // TODO
-void handleKeyDown(SDL_KeyboardEvent* event)
+void handleKeyDown( SDL_KeyboardEvent* event )
 {
-    // ignore repeat events if key is held down
-    if (event->repeat) {
-        return;
-    }
+    // // ignore repeat events if key is held down
+    // if ( event->repeat ) {
+    //     return;
+    // }
 
-    if (event->keysym.scancode == SDL_SCANCODE_Q || event->keysym.scancode == SDL_SCANCODE_ESCAPE) {
+    if ( event->keysym.scancode == SDL_SCANCODE_Q || event->keysym.scancode == SDL_SCANCODE_ESCAPE ) {
         shouldExit = true;
     }
 
-    if (event->keysym.scancode == SDL_SCANCODE_UP || event->keysym.scancode == SDL_SCANCODE_W) {
+    if ( event->keysym.scancode == SDL_SCANCODE_UP || event->keysym.scancode == SDL_SCANCODE_W ) {
         send( clientfd, "0", 2, 0 );
-        printf( "Player tried to move up\n" );
+        // printf( "Player tried to move up\n" );
     }
-    if (event->keysym.scancode == SDL_SCANCODE_RIGHT || event->keysym.scancode == SDL_SCANCODE_D) {
+    if ( event->keysym.scancode == SDL_SCANCODE_RIGHT || event->keysym.scancode == SDL_SCANCODE_D ) {
         send( clientfd, "1", 2, 0 );
-        printf( "Player tried to move right\n" );
+        // printf( "Player tried to move right\n" );
     }
-    if (event->keysym.scancode == SDL_SCANCODE_DOWN || event->keysym.scancode == SDL_SCANCODE_S) {
+    if ( event->keysym.scancode == SDL_SCANCODE_DOWN || event->keysym.scancode == SDL_SCANCODE_S ) {
         send( clientfd, "2", 2, 0 );
-        printf( "Player tried to move down\n" );
+        // printf( "Player tried to move down\n" );
     }
-    if (event->keysym.scancode == SDL_SCANCODE_LEFT || event->keysym.scancode == SDL_SCANCODE_A) {
+    if ( event->keysym.scancode == SDL_SCANCODE_LEFT || event->keysym.scancode == SDL_SCANCODE_A ) {
         send( clientfd, "3", 2, 0 );
-        printf( "Player tried to move left\n" );
+        // printf( "Player tried to move left\n" );
     }        
 }
 
@@ -120,19 +115,15 @@ void drawGrid( SDL_Renderer* renderer, SDL_Texture* grassTexture, SDL_Texture* t
             SDL_Texture* texture;
             if ( data[i * GRIDSIZE + j] == TILE_GRASS ) {
                 texture = grassTexture;
-                // printf( "grass\n" );
             }
             else if ( data[i * GRIDSIZE + j] == TILE_TOMATO ) {
                 texture = tomatoTexture;
-                // printf( "tomato\n" );
             }
             else {
                 texture = playerTexture;
-                // printf( "player\n" );
             }
-            // SDL_Texture* texture = (grid[i][j] == TILE_GRASS) ? grassTexture : tomatoTexture;
-            SDL_QueryTexture(texture, NULL, NULL, &dest.w, &dest.h);
-            SDL_RenderCopy(renderer, texture, NULL, &dest);
+            SDL_QueryTexture( texture, NULL, NULL, &dest.w, &dest.h );
+            SDL_RenderCopy( renderer, texture, NULL, &dest );
         }
     }
 }
@@ -188,14 +179,10 @@ SDL_Texture *playerTexture;
 void* getUpdatesFromServer( void* i ) {
     char buf[( GRIDSIZE * GRIDSIZE + 2 ) * 4];
     while ( 1 ) {
-        SDL_SetRenderDrawColor(renderer, 0, 105, 6, 255);
-        SDL_RenderClear(renderer);
+        SDL_SetRenderDrawColor( renderer, 0, 105, 6, 255 );
+        SDL_RenderClear( renderer );
 
-        int n = recv( clientfd, buf, ( GRIDSIZE * GRIDSIZE + 2 ) * 4, 0 );
-        if ( n <= 0 ) {
-            printf( "Server shut down\n" );
-            exit( 0 );
-        }
+        recv( clientfd, buf, ( GRIDSIZE * GRIDSIZE + 2 ) * 4, 0 );
         
         if ( strcmp( buf, "Unable to accept connection from client." ) == 0 ) {
             printf( "Sorry! Current room is full.\n" );
@@ -225,7 +212,7 @@ void* waitConnected( void* i ) {
 
 
 typedef struct addrinfo addrinfo;
-int main(int argc, char* argv[]) {
+int main( int argc, char* argv[] ) {
     if ( argc == 1 ) {
         printf( "Please specify a port number\n" );
         exit( 0 );
@@ -235,29 +222,29 @@ int main(int argc, char* argv[]) {
 
     initSDL();
 
-    font = TTF_OpenFont("resources/Burbank-Big-Condensed-Bold-Font.otf", HEADER_HEIGHT);
-    if (font == NULL) {
-        fprintf(stderr, "Error loading font: %s\n", TTF_GetError());
-        exit(EXIT_FAILURE);
+    font = TTF_OpenFont( "resources/Burbank-Big-Condensed-Bold-Font.otf", HEADER_HEIGHT );
+    if ( font == NULL ) {
+        fprintf( stderr, "Error loading font: %s\n", TTF_GetError() );
+        exit( EXIT_FAILURE );
     }
 
-    window = SDL_CreateWindow("Client", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, 0);
+    window = SDL_CreateWindow( "Client", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, 0 );
 
-    if (window == NULL) {
-        fprintf(stderr, "Error creating app window: %s\n", SDL_GetError());
-        exit(EXIT_FAILURE);
+    if ( window == NULL ) {
+        fprintf( stderr, "Error creating app window: %s\n", SDL_GetError() );
+        exit( EXIT_FAILURE );
     }
 
-    renderer = SDL_CreateRenderer(window, -1, 0);
+    renderer = SDL_CreateRenderer( window, -1, 0 );
 
-	if (renderer == NULL) {
-		fprintf(stderr, "Error creating renderer: %s\n", SDL_GetError());
-        exit(EXIT_FAILURE);
+	if ( renderer == NULL ) {
+		fprintf( stderr, "Error creating renderer: %s\n", SDL_GetError() );
+        exit( EXIT_FAILURE );
 	}
 
-    grassTexture = IMG_LoadTexture(renderer, "resources/grass.png");
-    tomatoTexture = IMG_LoadTexture(renderer, "resources/tomato.png");
-    playerTexture = IMG_LoadTexture(renderer, "resources/player.png");
+    grassTexture = IMG_LoadTexture( renderer, "resources/grass.png" );
+    tomatoTexture = IMG_LoadTexture( renderer, "resources/tomato.png" );
+    playerTexture = IMG_LoadTexture( renderer, "resources/player.png" );
 
     addrinfo hints;
     memset( &hints, 0, sizeof( addrinfo ) );
@@ -277,7 +264,6 @@ int main(int argc, char* argv[]) {
         }
         
         if ( connect( clientfd, ptr->ai_addr, ptr->ai_addrlen ) != -1 ) {
-            // printf( "Successfully connected to server\n" );
             break;
         }
         
@@ -300,16 +286,16 @@ int main(int argc, char* argv[]) {
     }
 
     // clean up everything
-    SDL_DestroyTexture(grassTexture);
-    SDL_DestroyTexture(tomatoTexture);
-    SDL_DestroyTexture(playerTexture);
+    SDL_DestroyTexture( grassTexture );
+    SDL_DestroyTexture( tomatoTexture );
+    SDL_DestroyTexture( playerTexture );
 
-    TTF_CloseFont(font);
+    TTF_CloseFont( font );
     TTF_Quit();
 
     IMG_Quit();
 
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
+    SDL_DestroyRenderer( renderer );
+    SDL_DestroyWindow( window );
     SDL_Quit();
 }

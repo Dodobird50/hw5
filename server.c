@@ -210,7 +210,7 @@ void movePlayer( int playerNumber, int direction ) {
 }
 
 int listenfd;
-pthread_t playerThreads[MAX_CONNECTIONS];
+pthread_t playerThreads[ MAX_CONNECTIONS ];
 sem_t modifyConnfds;
 void* playerThread( void* index ) {
     char buf[10];
@@ -310,7 +310,7 @@ int main( int argc, char** argv ) {
     }
     freeaddrinfo( addrinfo );
     if ( listenfd < 0 ) {
-        // printf( "server setup failed\n" );
+        printf( "Server setup failed\n" );
         exit( 0 );
     }
     
